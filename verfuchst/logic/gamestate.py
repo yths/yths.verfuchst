@@ -1,5 +1,249 @@
 import collections
 import uuid
+import functools
+
+
+BOARD_CONFIG = {
+    '001': {
+        'label': 'start',
+        'x': 64,
+        'y': 64,
+        'color': 'gold',
+        'value': 0,
+    },
+    '002': {
+        'label': 'end',
+        'x': 576,
+        'y': 128,
+        'color': 'gold',
+        'value': 0,
+    },
+    '003': {
+        'label': '-1.1',
+        'x': 128,
+        'y': 64,
+        'value': -1,
+        'color': 'red3'
+    },
+    '004': {
+        'label': '-2.1',
+        'x': 192,
+        'y': 64,
+        'value': -2,
+        'color': 'red3'
+    },
+    '005': {
+        'label': '-3.1',
+        'x': 192,
+        'y': 128,
+        'value': -3,
+        'color': 'red3'
+    },
+    '006': {
+        'label': '-4.1',
+        'x': 192,
+        'y': 192,
+        'value': -4,
+        'color': 'red3'
+    },
+    '007': {
+        'label': '-5.1',
+        'x': 128,
+        'y': 192,
+        'value': -5,
+        'color': 'red3'
+    },
+    '008': {
+        'label': '-6.1',
+        'x': 128,
+        'y': 256,
+        'value': -6,
+        'color': 'red3'
+    },
+    '009': {
+        'label': '-7.1',
+        'x': 192,
+        'y': 256,
+        'value': -7,
+        'color': 'red3'
+    },
+    '010': {
+        'label': '-8.1',
+        'x': 256,
+        'y': 256,
+        'value': -8,
+        'color': 'red3'
+    },
+    '011': {
+        'label': 'g.1',
+        'x': 320,
+        'y': 256,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '012': {
+        'label': 'g.2',
+        'x': 384,
+        'y': 256,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '013': {
+        'label': 'g.3',
+        'x': 448,
+        'y': 256,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '014': {
+        'label': 'g.4',
+        'x': 448,
+        'y': 320,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '015': {
+        'label': 'g.5',
+        'x': 448,
+        'y': 384,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '016': {
+        'label': 'g.6',
+        'x': 448,
+        'y': 448,
+        'value': 0,
+        'color': 'NavajoWhite2'
+    },
+    '017': {
+        'label': '+8.1',
+        'x': 384,
+        'y': 448,
+        'value': 8,
+        'color': 'SpringGreen2'
+    },
+    '018': {
+        'label': '+7.1',
+        'x': 320,
+        'y': 448,
+        'value': 7,
+        'color': 'SpringGreen2'
+    },
+    '019': {
+        'label': '+6.1',
+        'x': 320,
+        'y': 384,
+        'value': 6,
+        'color': 'SpringGreen2'
+    },
+    '020': {
+        'label': '+5.1',
+        'x': 256,
+        'y': 384,
+        'value': 5,
+        'color': 'SpringGreen2'
+    },
+    '021': {
+        'label': '+4.1',
+        'x': 192,
+        'y': 384,
+        'value': 4,
+        'color': 'SpringGreen2'
+    },
+    '022': {
+        'label': '+3.1',
+        'x': 192,
+        'y': 448,
+        'value': 3,
+        'color': 'SpringGreen2'
+    },
+    '023': {
+        'label': '+2.1',
+        'x': 192,
+        'y': 512,
+        'value': 2,
+        'color': 'SpringGreen2'
+    },
+    '024': {
+        'label': '+1.1',
+        'x': 256,
+        'y': 512,
+        'value': 1,
+        'color': 'SpringGreen2'
+    },
+    '025': {
+        'label': '-1.2',
+        'x': 320,
+        'y': 512,
+        'value': -1,
+        'color': 'red3'
+    },
+    '026': {
+        'label': '-2.2',
+        'x': 384,
+        'y': 512,
+        'value': -2,
+        'color': 'red3'
+    },
+    '027': {
+        'label': '-3.2',
+        'x': 448,
+        'y': 512,
+        'value': -3,
+        'color': 'red3'
+    },
+    '028': {
+        'label': '-4.2',
+        'x': 512,
+        'y': 512,
+        'value': -4,
+        'color': 'red3'
+    },
+    '029': {
+        'label': '-5.2',
+        'x': 576,
+        'y': 512,
+        'value': -5,
+        'color': 'red3'
+    },
+    '030': {
+        'label': '-6.2',
+        'x': 576,
+        'y': 448,
+        'value': -6,
+        'color': 'red3'
+    },
+    '031': {
+        'label': '-7.2',
+        'x': 576,
+        'y': 384,
+        'value': -7,
+        'color': 'red3'
+    },
+    '032': {
+        'label': '-8.2',
+        'x': 576,
+        'y': 320,
+        'value': -8,
+        'color': 'red3'
+    },
+    '033': {
+        'label': '-9.1',
+        'x': 576,
+        'y': 256,
+        'value': -9,
+        'color': 'red3'
+    },
+    '034': {
+        'label': '-10.1',
+        'x': 576,
+        'y': 192,
+        'value': -10,
+        'color': 'red3'
+    },
+}
+
 
 class InvalidGameCommand(Exception):
     def __init__(self, command, message='invalid game command'):
@@ -91,6 +335,27 @@ class Game:
             self.active_player_state = 'roll_die'
         else:
             raise InvalidGameCommand('move')
+
+
+    def calculate_score(self, tiles):
+        negative = list()
+        score = 0
+        invert = 0
+        for tid in tiles:
+            if board_config[tid]['value'] == 0:
+                invert += 1
+            elif board_config[tid]['value'] > 0:
+                score += board_config[tid]['value']
+            else:
+                negative.append(board_config[tid]['value'])
+        negative = sorted(negative)
+        for i in range(invert):
+            if len(negative) > i:
+                score += -1 * negative[i]
+        for i in range(invert, len(negative)):
+            score += negative[i]
+
+        return score
 
 
 if __name__ == '__main__':
