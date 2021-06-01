@@ -9,6 +9,8 @@ import base64
 import collections
 import random
 
+import verfuchst.logic.gamestate
+
 client_id = uuid.uuid4().hex
 client_registered = False
 client_state = 'connect_frame'
@@ -277,60 +279,6 @@ board_config = {
 }
 
 
-class Game:
-    def __init__(self, host_client_id):
-        self.game_id = uuid.uuid4().hex
-        self.host_client_id = host_client_id
-        self.players = [host_client_id]
-        self.game_state = 'initialization'
-        self.active_player = host_client_id
-        self.active_player_state = 'roll_die'
-        self.board = ['001', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '028', '029', '030', '031', '032', '033', '034', '002']
-        self.pieces = collections.defaultdict(functools.partial(collections.defaultdict, str))
-        self.guards = collections.defaultdict(int)
-        self.die_roll = 0
-
-    def join(self, client_id):
-        if self.game_state == 'initialization' and len(self.players) < 4:
-            self.players.append(client_id)
-        else:
-            raise
-
-    def start(self):
-        if len(self.players) > 1:
-            self.game_state = 'running'
-            # self.board = ['001', '002']
-            for player in self.players:
-                self.pieces[player]['001'] = '001'
-                self.pieces[player]['002'] = '001'
-                self.pieces[player]['003'] = '001'
-            for i, tid in enumerate(['011', '012', '013', '014', '015', '016', '017', '018']):
-                self.guards[tid] = 1
-        else:
-            self.game_state = 'initialization'
-            raise
-
-    def roll_die(self, client_id):
-        if self.active_player_state == 'roll_die' and self.active_player == client_id:
-            self.active_player_state = 'move'
-            self.die_roll = random.randint(1, 6)
-        else:
-            raise
-
-    def move(self, client_id, tile, type):
-        if self.active_player_state == 'move' and self.active_player == client_id:
-            if type == 'piece':
-                for k in self.pieces[client_id]:
-                    if self.pieces[client_id][k] == tile:
-                        self.pieces[client_id][k] = self.board[min(self.board.index(tile) + self.die_roll, len(self.board))]
-                        break
-
-            self.active_player = self.players[(self.players.index(client_id) +  1) % len(self.players)]
-            self.active_player_state = 'roll_die'
-        else:
-            raise
-
-
 async def send(message):
     global clients
     global client_registered
@@ -597,26 +545,23 @@ def poll():
                 canvas.create_line(board_config[tid_start]['x'], board_config[tid_start]['y'], (board_config[tid_end]['x'] - board_config[tid_start]['x']) / 2 + board_config[tid_start]['x'], (board_config[tid_end]['y']- board_config[tid_start]['y']) / 2 + board_config[tid_start]['y'], width=3, fill='grey')
                 canvas.create_line(board_config[tid_start]['x'], board_config[tid_start]['y'], board_config[tid_end]['x'], board_config[tid_end]['y'], width=1)
 
-            try:
-                for i, player in enumerate(game.players):
-                    if i == 0:
-                        canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 8, board_config[game.pieces[player]['001']]['y'] - 12, board_config[game.pieces[player]['001']]['x'] - 8 + 4, board_config[game.pieces[player]['001']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                        canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 2, board_config[game.pieces[player]['002']]['y'] - 12, board_config[game.pieces[player]['002']]['x'] - 2 + 4, board_config[game.pieces[player]['002']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                        canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 8 - 4, board_config[game.pieces[player]['003']]['y'] - 12, board_config[game.pieces[player]['003']]['x'] + 8, board_config[game.pieces[player]['003']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                    elif i == 1:
-                        canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 8, board_config[game.pieces[player]['001']]['y'] + 12, board_config[game.pieces[player]['001']]['x'] - 8 + 4, board_config[game.pieces[player]['001']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                        canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 2, board_config[game.pieces[player]['002']]['y'] + 12, board_config[game.pieces[player]['002']]['x'] - 2 + 4, board_config[game.pieces[player]['002']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                        canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 8 - 4, board_config[game.pieces[player]['003']]['y'] + 12, board_config[game.pieces[player]['003']]['x'] + 8, board_config[game.pieces[player]['003']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                    elif i == 2:
-                        canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 12, board_config[game.pieces[player]['001']]['y'] - 8, board_config[game.pieces[player]['001']]['x'] - 12 + 4, board_config[game.pieces[player]['001']]['y'] - 8 + 4, fill='SeaGreen1', outline='SeaGreen1')
-                        canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 12, board_config[game.pieces[player]['002']]['y'] - 2, board_config[game.pieces[player]['002']]['x'] - 12 + 4, board_config[game.pieces[player]['002']]['y'] - 2 + 4, fill='SeaGreen1', outline='SeaGreen1')
-                        canvas.create_oval(board_config[game.pieces[player]['003']]['x'] - 12, board_config[game.pieces[player]['003']]['y'] + 8 - 4, board_config[game.pieces[player]['003']]['x'] - 12 + 4, board_config[game.pieces[player]['003']]['y'] + 8, fill='SeaGreen1', outline='SeaGreen1')
-                    elif i == 3:
-                        canvas.create_oval(board_config[game.pieces[player]['001']]['x'] + 12, board_config[game.pieces[player]['001']]['y'] - 8, board_config[game.pieces[player]['001']]['x'] + 12 - 4, board_config[game.pieces[player]['001']]['y'] - 8 + 4, fill='MediumPurple1', outline='MediumPurple1')
-                        canvas.create_oval(board_config[game.pieces[player]['002']]['x'] + 12, board_config[game.pieces[player]['002']]['y'] - 2, board_config[game.pieces[player]['002']]['x'] + 12 - 4, board_config[game.pieces[player]['002']]['y'] - 2 + 4, fill='MediumPurple1', outline='MediumPurple1')
-                        canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 12, board_config[game.pieces[player]['003']]['y'] + 8 - 4, board_config[game.pieces[player]['003']]['x'] + 12 - 4, board_config[game.pieces[player]['003']]['y'] + 8, fill='MediumPurple1', outline='MediumPurple1')
-            except:
-                pass
+            for i, player in enumerate(game.players):
+                if i == 0:
+                    canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 8, board_config[game.pieces[player]['001']]['y'] - 12, board_config[game.pieces[player]['001']]['x'] - 8 + 4, board_config[game.pieces[player]['001']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                    canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 2, board_config[game.pieces[player]['002']]['y'] - 12, board_config[game.pieces[player]['002']]['x'] - 2 + 4, board_config[game.pieces[player]['002']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                    canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 8 - 4, board_config[game.pieces[player]['003']]['y'] - 12, board_config[game.pieces[player]['003']]['x'] + 8, board_config[game.pieces[player]['003']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                elif i == 1:
+                    canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 8, board_config[game.pieces[player]['001']]['y'] + 12, board_config[game.pieces[player]['001']]['x'] - 8 + 4, board_config[game.pieces[player]['001']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                    canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 2, board_config[game.pieces[player]['002']]['y'] + 12, board_config[game.pieces[player]['002']]['x'] - 2 + 4, board_config[game.pieces[player]['002']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                    canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 8 - 4, board_config[game.pieces[player]['003']]['y'] + 12, board_config[game.pieces[player]['003']]['x'] + 8, board_config[game.pieces[player]['003']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                elif i == 2:
+                    canvas.create_oval(board_config[game.pieces[player]['001']]['x'] - 12, board_config[game.pieces[player]['001']]['y'] - 8, board_config[game.pieces[player]['001']]['x'] - 12 + 4, board_config[game.pieces[player]['001']]['y'] - 8 + 4, fill='SeaGreen1', outline='SeaGreen1')
+                    canvas.create_oval(board_config[game.pieces[player]['002']]['x'] - 12, board_config[game.pieces[player]['002']]['y'] - 2, board_config[game.pieces[player]['002']]['x'] - 12 + 4, board_config[game.pieces[player]['002']]['y'] - 2 + 4, fill='SeaGreen1', outline='SeaGreen1')
+                    canvas.create_oval(board_config[game.pieces[player]['003']]['x'] - 12, board_config[game.pieces[player]['003']]['y'] + 8 - 4, board_config[game.pieces[player]['003']]['x'] - 12 + 4, board_config[game.pieces[player]['003']]['y'] + 8, fill='SeaGreen1', outline='SeaGreen1')
+                elif i == 3:
+                    canvas.create_oval(board_config[game.pieces[player]['001']]['x'] + 12, board_config[game.pieces[player]['001']]['y'] - 8, board_config[game.pieces[player]['001']]['x'] + 12 - 4, board_config[game.pieces[player]['001']]['y'] - 8 + 4, fill='MediumPurple1', outline='MediumPurple1')
+                    canvas.create_oval(board_config[game.pieces[player]['002']]['x'] + 12, board_config[game.pieces[player]['002']]['y'] - 2, board_config[game.pieces[player]['002']]['x'] + 12 - 4, board_config[game.pieces[player]['002']]['y'] - 2 + 4, fill='MediumPurple1', outline='MediumPurple1')
+                    canvas.create_oval(board_config[game.pieces[player]['003']]['x'] + 12, board_config[game.pieces[player]['003']]['y'] + 8 - 4, board_config[game.pieces[player]['003']]['x'] + 12 - 4, board_config[game.pieces[player]['003']]['y'] + 8, fill='MediumPurple1', outline='MediumPurple1')
 
             for tid in game.board:
                 outline = board_config[tid]['color']
@@ -699,6 +644,3 @@ def poll():
 if __name__ == '__main__':
     window.after(1000, poll)
     window.mainloop()
-    # message = json.dumps({'client_id': uuid.uuid4().hex})
-    # asyncio.run(send(message))
-    # asyncio.run(send(message))

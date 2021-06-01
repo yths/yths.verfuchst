@@ -1,4 +1,5 @@
 # Verfuchst - A Gamer for Four Players
+[![CodeFactor](https://www.codefactor.io/repository/github/yths/yths.verfuchst/badge/main)](https://www.codefactor.io/repository/github/yths/yths.verfuchst/overview/main)
 ## Introduction
 The purpose of this project is foremost to teach me different concepts of software engineering, data science and design; and thus might seem overengineered or unnecessarily complicated in some places. As a side effect a little game called "Verfuchst" is developed.
 ## Rules of the Game
