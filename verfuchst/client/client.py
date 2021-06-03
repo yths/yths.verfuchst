@@ -251,6 +251,43 @@ class GUI:
             self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
 
 
+    def _display_final_score(self, colors):
+        self.start_game_button.configure(text='game is completed')
+        self.canvas.delete('all')
+        self.game_id.set('Game: ' + self.game.game_id)
+        i = 0
+        winner = list()
+        for player, color in zip(self.game.players, colors[:len(self.game.players)]):
+            if player in self.clients:
+                i += 1
+                txt = self.clients[player][0] + ': ' + str(self.game.calculate_score(self.game.scores[player])) + ' points'
+                winner.append([self.clients[player][0], self.game.calculate_score(self.game.scores[player])])
+                self.canvas.create_text(64, i * 43, text=txt, anchor='nw', font='TkMenuFont', fill='black')
+        i += 1
+        self.canvas.create_text(64, i * 43, text='Winner is: ' + sorted(winner, key=lambda x: -x[1])[0][0], anchor='nw', font=('TkMenuFont', 16, 'bold'), fill='black')
+
+
+    def _draw_board(self):
+        for i in range(len(self.game.board) - 1):
+            tid_start = self.game.board[i]
+            tid_end = self.game.board[i + 1]
+            self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'] - verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y']- verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], width=3, fill='grey')
+            self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y'], width=1)
+
+        self._draw_pegs()
+
+        for tid in self.game.board:
+            outline = verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color']
+            width = 1
+            if self.selected_item[0] == tid:
+                outline = 'black'
+                if self.selected_item[1] == 'guard':
+                    width = 3
+            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] + 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] + 7, fill=verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color'], outline=outline, width=width, tags=('tid=' + tid,))
+            self.canvas.create_text(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 14, text=str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']), anchor='center', font=('TkMenuFont', 8), fill='black')
+            self._draw_guardians(tid)
+
+
     def poll(self):
         colors = ['blue', 'red', 'green', 'purple']
         if self.client_registered:
@@ -276,24 +313,7 @@ class GUI:
                         self.roll_die_button.configure(state=tkinter.DISABLED)
 
                     self._draw_die()
-                    for i in range(len(self.game.board) - 1):
-                        tid_start = self.game.board[i]
-                        tid_end = self.game.board[i + 1]
-                        self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'] - verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y']- verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], width=3, fill='grey')
-                        self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y'], width=1)
-
-                    self._draw_pegs()
-
-                    for tid in self.game.board:
-                        outline = verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color']
-                        width = 1
-                        if self.selected_item[0] == tid:
-                            outline = 'black'
-                            if self.selected_item[1] == 'guard':
-                                width = 3
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] + 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] + 7, fill=verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color'], outline=outline, width=width, tags=('tid=' + tid,))
-                        self.canvas.create_text(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 14, text=str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']), anchor='center', font=('TkMenuFont', 8), fill='black')
-                        self._draw_guardians(tid)
+                    self._draw_board()
                     if self.selected_item[0] is not None:
                         ntid = self.game.board[min(self.game.board.index(self.selected_item[0]) + self.game.die_roll, len(self.game.board) - 1)]
                         item = self.canvas.find_withtag('tid=' + ntid)
@@ -304,19 +324,7 @@ class GUI:
                     self.canvas.create_text(640, 288, text='Score: ' + str(score), anchor='nw', font='TkMenuFont', fill='black')
             if self.game is not None:
                 if self.game.game_state == 'completed':
-                    start_game_button.configure(text='game is completed')
-                    self.canvas.delete('all')
-                    game_id.set('Game: ' + self.game.game_id)
-                    i = 0
-                    winner = list()
-                    for player, color in zip(self.game.players, colors[:len(self.game.players)]):
-                        if player in self.clients:
-                            i += 1
-                            txt = self.clients[player][0] + ': ' + str(self.game.calculate_score(self.game.scores[player])) + ' points'
-                            winner.append([self.clients[player][0], self.game.calculate_score(self.game.scores[player])])
-                            self.canvas.create_text(64, i * 43, text=txt, anchor='nw', font='TkMenuFont', fill='black')
-                    i += 1
-                    self.canvas.create_text(64, i * 43, text='Winner is: ' + sorted(winner, key=lambda x: -x[1])[0][0], anchor='nw', font=('TkMenuFont', 16, 'bold'), fill='black')
+                    _display_final_score(colors)
         self.window.after(1000, self.poll)
 
 
@@ -343,10 +351,10 @@ class GUI:
             occupied_tiles += self.game.pieces[cid].values()
 
         active_guards = set()
-        for tid in self.game.guards:
-            if self.game.guards[tid] > 0:
-                if tid in occupied_tiles:
-                    active_guards.add(tid)
+        for gid in self.game.guards:
+            if self.game.guards[gid] > 0:
+                if gid in occupied_tiles:
+                    active_guards.add(gid)
 
         if tid in active_guards:
             mode = 2
