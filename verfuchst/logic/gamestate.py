@@ -388,7 +388,7 @@ class Game:
                 self._move_piece(client_id, tile)
 
                 # check if game is completed
-                _check_game_state()
+                self._check_game_state()
             elif piece_type == 'guard':
                 self._move_guardian(tile)
 
