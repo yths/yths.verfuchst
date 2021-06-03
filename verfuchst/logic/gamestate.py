@@ -346,38 +346,51 @@ class Game:
         else:
             raise InvalidGameCommand('roll_die')
 
+
+    def _move_piece(self, client_id, tile):
+        for k in self.pieces[client_id]:
+            if self.pieces[client_id][k] == tile:
+                self.pieces[client_id][k] = self.board[min(self.board.index(tile) + self.die_roll, len(self.board) - 1)]
+                break
+
+        occupied = False
+        if tile not in ['001', '002']:
+            if self.guards[tile] == 0:
+                for cid in self.pieces:
+                    for k in self.pieces[cid]:
+                        if tile == self.pieces[cid][k]:
+                            occupied = True
+            else:
+                occupied = True
+            if not occupied:
+                self.board.remove(tile)
+                self.scores[self.active_player].add(tile)
+
+
+    def _check_game_state(self):
+        active_tiles = set()
+        for cid in self.pieces:
+            for k in self.pieces[cid]:
+                active_tiles.add(self.pieces[cid][k])
+
+        if active_tiles == set(['002']):
+            self.game_state = 'completed'
+
+
+    def _move_guardian(self, tile):
+        self.guards[tile] -= 1
+        self.guards[self.board[min(self.board.index(tile) + self.die_roll, len(self.board) - 1)]] += 1
+
+
     def move(self, client_id, tile, piece_type):
         if self.active_player_state == 'move' and self.active_player == client_id:
             if piece_type == 'piece':
-                for k in self.pieces[client_id]:
-                    if self.pieces[client_id][k] == tile:
-                        self.pieces[client_id][k] = self.board[min(self.board.index(tile) + self.die_roll, len(self.board) - 1)]
-                        break
+                self._move_piece(client_id, tile)
 
-                occupied = False
-                if tile not in ['001', '002']:
-                    if self.guards[tile] == 0:
-                        for cid in self.pieces:
-                            for k in self.pieces[cid]:
-                                if tile == self.pieces[cid][k]:
-                                    occupied = True
-                    else:
-                        occupied = True
-                    if not occupied:
-                        self.board.remove(tile)
-                        self.scores[self.active_player].add(tile)
-
-                active_tiles = set()
-                for cid in self.pieces:
-                    for k in self.pieces[cid]:
-                        active_tiles.add(self.pieces[cid][k])
-
-                if active_tiles == set(['002']):
-                    self.game_state = 'completed'
-
+                # check if game is completed
+                _check_game_state()
             elif piece_type == 'guard':
-                self.guards[tile] -= 1
-                self.guards[self.board[min(self.board.index(tile) + self.die_roll, len(self.board) - 1)]] += 1
+                self._move_guardian(tile)
 
             self.active_player = self.players[(self.players.index(client_id) +  1) % len(self.players)]
             self.active_player_state = 'roll_die'
