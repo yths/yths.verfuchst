@@ -2,7 +2,6 @@ import asyncio
 import json
 import uuid
 import datetime
-import pickle
 import base64
 import random
 import functools
@@ -39,6 +38,7 @@ class Server:
                 for client_id in self.clients:
                     if (datetime.datetime.now() - self.clients[client_id].last_message).seconds > self.client_expiration_threshold:
                         expired_clients.add(client_id)
+
                 for client_id in expired_clients:
                     del self.clients[client_id]
                 expired_games = set()
@@ -50,9 +50,9 @@ class Server:
                 game_payload = None
                 for game_id in self.games:
                     if message['client_id'] in self.games[game_id].players:
-                        game_payload = self.games[game_id]
+                        game_payload = self.games[game_id].serialize()
                         break
-                response = json.dumps({'status': 'success', 'command': 'get_game_state', 'game_payload': base64.b64encode(pickle.dumps(game_payload)).decode('ascii'), 'self.clients': [[str(client_id), self.clients[client_id].client_name, self.clients[client_id].game_id] for client_id in self.clients.keys()], 'self.games': [game_id for game_id in self.games if self.games[game_id].game_state == 'initialization']})
+                response = json.dumps({'status': 'success', 'command': 'get_game_state', 'game_payload': game_payload, 'clients': [[str(client_id), self.clients[client_id].client_name, self.clients[client_id].game_id] for client_id in self.clients.keys()], 'games': [game_id for game_id in self.games if self.games[game_id].game_state == 'initialization']})
         elif message['command'] == 'create_game':
             game = verfuchst.logic.gamestate.Game(message['client_id'])
             self.games[game.game_id] = game

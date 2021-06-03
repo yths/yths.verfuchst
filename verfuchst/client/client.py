@@ -54,14 +54,12 @@ class GUI:
         self.players_list = tkinter.StringVar()
         self.players_listbox = tkinter.Listbox(self.game_frame, listvariable=self.players_list, state=tkinter.NORMAL)
         self.players_listbox.grid(row=0, column=4, columnspan=1, rowspan=4, padx=5, pady=5, sticky=tkinter.E+tkinter.W+tkinter.S+tkinter.N)
-        self.start_game_button = tkinter.Button(self.game_frame, text='Start Game', command=lambda: start_game(game), state=tkinter.DISABLED)
+        self.start_game_button = tkinter.Button(self.game_frame, text='Start Game', command=self.start_game, state=tkinter.DISABLED)
         self.start_game_button.grid(row=2, column=0, columnspan=1, rowspan=1, padx=5, pady=5, sticky=tkinter.E+tkinter.W+tkinter.S+tkinter.N)
-        self.roll_die_button = tkinter.Button(self.game_frame, text='Roll Die', command=lambda: roll_die(game), state=tkinter.DISABLED)
+        self.roll_die_button = tkinter.Button(self.game_frame, text='Roll Die', command=self.roll_die, state=tkinter.DISABLED)
         self.roll_die_button.grid(row=2, column=1, columnspan=1, rowspan=1, padx=5, pady=5, sticky=tkinter.E+tkinter.W+tkinter.S+tkinter.N)
 
-        self.window.after(1000, self.poll)
-
-        self.game = verfuchst.logic.gamestate.Game(None)
+        self.game = None
 
         self.canvas = tkinter.Canvas(self.game_frame, width=1280, height=720)
         self.canvas.bind("<Button-1>", self.interact)
@@ -71,6 +69,8 @@ class GUI:
         self.selected_item = [None, None]
 
         self.connect_frame.tkraise()
+
+        self.window.after(1000, self.poll)
 
 
     def connect(self):
@@ -98,7 +98,9 @@ class GUI:
             elif response['command'] == 'get_game_state':
                 for c, n, g in response['clients']:
                     self.clients[c] = [n, g]
-                self.game = pickle.loads(base64.b64decode(response['game_payload']))
+                if response['game_payload'] is not None:
+                    self.game = verfuchst.logic.gamestate.Game(None)
+                    self.game.deserialize(response['game_payload'])
                 self.games = response['games']
                 self.games_combobox['values'] = self.games
             elif response['command'] == 'create_game':
@@ -117,10 +119,10 @@ class GUI:
                     tkinter.messagebox.showerror(title='Game Error', message='Game is no longer available.')
             elif response['command'] == 'start_game':
                 if response['status'] == 'success':
-                    start_game_button.configure(state=tkinter.DISABLED)
+                    self.start_game_button.configure(state=tkinter.DISABLED)
             elif response['command'] == 'roll_die':
                 if response['status'] == 'success':
-                    roll_die_button.configure(state=tkinter.DISABLED)
+                    self.roll_die_button.configure(state=tkinter.DISABLED)
             elif response['command'] == 'move_piece':
                 if response['status'] == 'success':
                     self.selected_item = [None, None]
@@ -157,157 +159,160 @@ class GUI:
             message = json.dumps({'client_id': self.client_id, 'command': 'get_game_state'})
             asyncio.run(self.send(message))
         if self.client_state == 'game_frame':
-            self.canvas.delete('all')
-            self.game_id.set('Game: ' + self.game.game_id)
-            self.players_list.set([self.clients[player][0] + ' (' + color + ')' + '[' + str(self.game.calculate_score(self.game.scores[player])) + ']' for player, color in zip(self.game.players, colors[:len(self.game.players)]) if player in self.clients])
-            self.players_listbox.selection_clear(0, tkinter.END)
-            self.players_listbox.selection_set(self.game.players.index(self.game.active_player))
-            if game.host_client_id == self.client_id and self.game.game_state == 'initialization':
-                start_game_button.configure(state=tkinter.NORMAL)
-            elif game.game_state == 'initialization':
-                start_game_button.configure(text='waiting for players')
-            elif game.game_state == 'running':
-                start_game_button.configure(text='game in progress')
-                if game.active_player == self.client_id and game.active_player_state == 'roll_die':
-                    roll_die_button.configure(state=tkinter.NORMAL)
-                else:
-                    roll_die_button.configure(state=tkinter.DISABLED)
-
-                self.canvas.create_text(1280 / 2, 32, text='Last Die Roll:', anchor='nw', font='TkMenuFont', fill='black')
-                self.canvas.create_rectangle(1280/2, 64, 1280/2 + 64, 64+64, fill='white', outline='black')
-                if self.game.die_roll == 1:
-                    self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
-                elif self.game.die_roll == 2:
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                elif self.game.die_roll == 3:
-                    self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                elif self.game.die_roll == 4:
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                elif self.game.die_roll == 5:
-                    self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                elif self.game.die_roll == 6:
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 48 - 4, 64 + 32 - 4, 1280/2 + 48 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 2
-                    self.canvas.create_oval(1280/2 + 16 - 4, 64 + 32 - 4, 1280/2 + 16 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 2
-                for i in range(len(self.game.board) - 1):
-                    tid_start = self.game.board[i]
-                    tid_end = self.game.board[i + 1]
-                    self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'] - verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y']- verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], width=3, fill='grey')
-                    self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y'], width=1)
-
-                for i, player in enumerate(game.players):
-                    if i == 0:
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[game.pieces[player]['002']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
-                    elif i == 1:
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[game.pieces[player]['001']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
-                    elif i == 2:
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8 + 4, fill='SeaGreen1', outline='SeaGreen1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2 + 4, fill='SeaGreen1', outline='SeaGreen1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8, fill='SeaGreen1', outline='SeaGreen1')
-                    elif i == 3:
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8 + 4, fill='MediumPurple1', outline='MediumPurple1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2 + 4, fill='MediumPurple1', outline='MediumPurple1')
-                        self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8, fill='MediumPurple1', outline='MediumPurple1')
-
-                for tid in self.game.board:
-                    outline = verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color']
-                    width = 1
-                    if self.selected_item[0] == tid:
-                        outline = 'black'
-                        if self.selected_item[1] == 'guard':
-                            width = 3
-                    self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] + 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] + 7, fill=verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color'], outline=outline, width=width, tags=('tid=' + tid,))
-                    self.canvas.create_text(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 14, text=str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']), anchor='center', font=('TkMenuFont', 8), fill='black')
-                    if self.game.guards[tid] == 1:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 2:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 6 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 3:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 4:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 5:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 6:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 7:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
-                    elif self.game.guards[tid] == 8:
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
-                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
-                if self.selected_item[0] is not None:
-                    ntid = self.game.board[min(self.game.board.index(self.selected_item[0]) + self.game.die_roll, len(self.game.board) - 1)]
-                    item = self.canvas.find_withtag('tid=' + ntid)
-                    self.canvas.itemconfig(item, width=3, outline='white')
-
-                self.canvas.create_text(640, 256, text='Tiles: ' + ' '.join([str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']) if verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value'] != 0 else 'G' for tid in self.game.scores[self.client_id]]), anchor='nw', font='TkMenuFont', fill='black')
-                score = self.game.calculate_score(self.game.scores[self.client_id])
-                self.canvas.create_text(640, 288, text='Score: ' + str(score), anchor='nw', font='TkMenuFont', fill='black')
-            elif self.game.game_state == 'completed':
-                start_game_button.configure(text='game is completed')
+            if self.game is not None:
                 self.canvas.delete('all')
-                game_id.set('Game: ' + self.game.game_id)
-                i = 0
-                winner = list()
-                for player, color in zip(self.game.players, colors[:len(self.game.players)]):
-                    if player in self.clients:
-                        i += 1
-                        txt = self.clients[player][0] + ': ' + str(self.game.calculate_score(self.game.scores[player])) + ' points'
-                        winner.append([self.clients[player][0], self.game.calculate_score(self.game.scores[player])])
-                        self.canvas.create_text(64, i * 43, text=txt, anchor='nw', font='TkMenuFont', fill='black')
-                i += 1
-                self.canvas.create_text(64, i * 43, text='Winner is: ' + sorted(winner, key=lambda x: -x[1])[0][0], anchor='nw', font=('TkMenuFont', 16, 'bold'), fill='black')
-        window.after(1000, self.poll)
+                self.game_id.set('Game: ' + self.game.game_id)
+                self.players_list.set([self.clients[player][0] + ' (' + color + ')' + '[' + str(self.game.calculate_score(self.game.scores[player])) + ']' for player, color in zip(self.game.players, colors[:len(self.game.players)]) if player in self.clients])
+                self.players_listbox.selection_clear(0, tkinter.END)
+                self.players_listbox.selection_set(self.game.players.index(self.game.active_player))
+                if self.game.host_client_id == self.client_id and self.game.game_state == 'initialization':
+                    self.start_game_button.configure(state=tkinter.NORMAL)
+                elif self.game.game_state == 'initialization':
+                    self.start_game_button.configure(text='waiting for players')
+                elif self.game.game_state == 'running':
+                    self.start_game_button.configure(text='game in progress')
+                    self.start_game_button.configure(state=tkinter.DISABLED)
+                    if self.game.active_player == self.client_id and self.game.active_player_state == 'roll_die':
+                        self.roll_die_button.configure(state=tkinter.NORMAL)
+                    else:
+                        self.roll_die_button.configure(state=tkinter.DISABLED)
+
+                    self.canvas.create_text(1280 / 2, 32, text='Last Die Roll:', anchor='nw', font='TkMenuFont', fill='black')
+                    self.canvas.create_rectangle(1280/2, 64, 1280/2 + 64, 64+64, fill='white', outline='black')
+                    if self.game.die_roll == 1:
+                        self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
+                    elif self.game.die_roll == 2:
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                    elif self.game.die_roll == 3:
+                        self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                    elif self.game.die_roll == 4:
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                    elif self.game.die_roll == 5:
+                        self.canvas.create_oval(1280/2 + 32 - 4, 64 + 32 - 4, 1280/2 + 32 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 1
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                    elif self.game.die_roll == 6:
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 16 - 4, 1280/2 + 16 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 48 - 4, 1280/2 + 48 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 16 - 4, 1280/2 + 48 + 4, 64 + 16 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 48 - 4, 1280/2 + 16 + 4, 64 + 48 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 48 - 4, 64 + 32 - 4, 1280/2 + 48 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 2
+                        self.canvas.create_oval(1280/2 + 16 - 4, 64 + 32 - 4, 1280/2 + 16 + 4, 64 + 32 + 4, fill='black', outline='black') # pip 2
+                    for i in range(len(self.game.board) - 1):
+                        tid_start = self.game.board[i]
+                        tid_end = self.game.board[i + 1]
+                        self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'] - verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], (verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y']- verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y']) / 2 + verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], width=3, fill='grey')
+                        self.canvas.create_line(verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_start]['y'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid_end]['y'], width=1)
+
+                    for i, player in enumerate(self.game.players):
+                        if i == 0:
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] - 12 + 4, fill='deep sky blue', outline='deep sky blue')
+                        elif i == 1:
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 8 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 2 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 12 - 4, fill='orchid1', outline='orchid1')
+                        elif i == 2:
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8 + 4, fill='SeaGreen1', outline='SeaGreen1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2 + 4, fill='SeaGreen1', outline='SeaGreen1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] - 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] - 12 + 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8, fill='SeaGreen1', outline='SeaGreen1')
+                        elif i == 3:
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['001']]['y'] - 8 + 4, fill='MediumPurple1', outline='MediumPurple1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['002']]['y'] - 2 + 4, fill='MediumPurple1', outline='MediumPurple1')
+                            self.canvas.create_oval(verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 12, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['x'] + 12 - 4, verfuchst.logic.gamestate.BOARD_CONFIG[self.game.pieces[player]['003']]['y'] + 8, fill='MediumPurple1', outline='MediumPurple1')
+
+                    for tid in self.game.board:
+                        outline = verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color']
+                        width = 1
+                        if self.selected_item[0] == tid:
+                            outline = 'black'
+                            if self.selected_item[1] == 'guard':
+                                width = 3
+                        self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 8, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] + 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] + 7, fill=verfuchst.logic.gamestate.BOARD_CONFIG[tid]['color'], outline=outline, width=width, tags=('tid=' + tid,))
+                        self.canvas.create_text(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'], verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 14, text=str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']), anchor='center', font=('TkMenuFont', 8), fill='black')
+                        if self.game.guards[tid] == 1:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 2:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 6 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 3:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 4:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 5:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 6:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 7:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
+                        elif self.game.guards[tid] == 8:
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
+                            self.canvas.create_rectangle(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['x'] - 7 + 5 + 5 + 3, verfuchst.logic.gamestate.BOARD_CONFIG[tid]['y'] - 7 + 5 + 3, outline='black', fill='black')
+                    if self.selected_item[0] is not None:
+                        ntid = self.game.board[min(self.game.board.index(self.selected_item[0]) + self.game.die_roll, len(self.game.board) - 1)]
+                        item = self.canvas.find_withtag('tid=' + ntid)
+                        self.canvas.itemconfig(item, width=3, outline='white')
+
+                    self.canvas.create_text(640, 256, text='Tiles: ' + ' '.join([str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']) if verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value'] != 0 else 'G' for tid in self.game.scores[self.client_id]]), anchor='nw', font='TkMenuFont', fill='black')
+                    score = self.game.calculate_score(self.game.scores[self.client_id])
+                    self.canvas.create_text(640, 288, text='Score: ' + str(score), anchor='nw', font='TkMenuFont', fill='black')
+            if self.game is not None:
+                if self.game.game_state == 'completed':
+                    start_game_button.configure(text='game is completed')
+                    self.canvas.delete('all')
+                    game_id.set('Game: ' + self.game.game_id)
+                    i = 0
+                    winner = list()
+                    for player, color in zip(self.game.players, colors[:len(self.game.players)]):
+                        if player in self.clients:
+                            i += 1
+                            txt = self.clients[player][0] + ': ' + str(self.game.calculate_score(self.game.scores[player])) + ' points'
+                            winner.append([self.clients[player][0], self.game.calculate_score(self.game.scores[player])])
+                            self.canvas.create_text(64, i * 43, text=txt, anchor='nw', font='TkMenuFont', fill='black')
+                    i += 1
+                    self.canvas.create_text(64, i * 43, text='Winner is: ' + sorted(winner, key=lambda x: -x[1])[0][0], anchor='nw', font=('TkMenuFont', 16, 'bold'), fill='black')
+        self.window.after(1000, self.poll)
 
 
     def confirm(self, event):
         if self.game.active_player == self.client_id and self.game.active_player_state == 'move':
-            item_confirmed = canvas.find_closest(event.x, event.y)
-            if selected_item[0] is not None:
+            item_confirmed = self.canvas.find_closest(event.x, event.y)
+            if self.selected_item[0] is not None:
                 ntid = self.game.board[min(self.game.board.index(self.selected_item[0]) + self.game.die_roll, len(self.game.board) - 1)]
                 item_allowed = self.canvas.find_withtag('tid=' + ntid)
 

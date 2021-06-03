@@ -1,6 +1,8 @@
 import collections
 import uuid
 import functools
+import json
+import random
 
 
 BOARD_CONFIG = {
@@ -269,6 +271,53 @@ class Game:
         self.die_roll = 0
         self.scores = collections.defaultdict(set)
 
+
+    def serialize(self):
+        scores = collections.defaultdict(list)
+        for k in self.scores:
+            scores[k] = list(self.scores[k])
+
+        serialized_gamestate = {
+            'game_id': self.game_id,
+            'host_client_id': self.host_client_id,
+            'players': self.players,
+            'game_state': self.game_state,
+            'active_player': self.active_player,
+            'active_player_state': self.active_player_state,
+            'board': self.board,
+            'pieces': self.pieces,
+            'guards': self.guards,
+            'die_roll': self.die_roll,
+            'scores': scores,
+        }
+        return json.dumps(serialized_gamestate)
+
+
+    def deserialize(self, serialized_gamestate):
+        data = json.loads(serialized_gamestate)
+
+        self.game_id = data['game_id']
+        self.host_client_id = data['host_client_id']
+        self.players = data['players']
+        self.game_state = data['game_state']
+        self.active_player = data['active_player']
+        self.active_player_state = data['active_player_state']
+        self.board = data['board']
+        tmp = collections.defaultdict(functools.partial(collections.defaultdict, str))
+        for k1 in data['pieces']:
+            for k2 in data['pieces'][k1]:
+                tmp[k1][k2] = data['pieces'][k1][k2]
+        self.pieces = tmp
+        tmp = collections.defaultdict(int)
+        tmp |= data['guards']
+        self.guards = tmp
+        self.die_roll = data['die_roll']
+        tmp = collections.defaultdict(set)
+        for k in data['scores']:
+            tmp[k] = set(data['scores'][k])
+        self.scores = tmp
+
+
     def join(self, client_id):
         if self.game_state == 'initialization' and len(self.players) < 4:
             self.players.append(client_id)
@@ -330,7 +379,6 @@ class Game:
                 self.guards[tile] -= 1
                 self.guards[self.board[min(self.board.index(tile) + self.die_roll, len(self.board) - 1)]] += 1
 
-
             self.active_player = self.players[(self.players.index(client_id) +  1) % len(self.players)]
             self.active_player_state = 'roll_die'
         else:
@@ -342,12 +390,12 @@ class Game:
         score = 0
         invert = 0
         for tid in tiles:
-            if board_config[tid]['value'] == 0:
+            if BOARD_CONFIG[tid]['value'] == 0:
                 invert += 1
-            elif board_config[tid]['value'] > 0:
-                score += board_config[tid]['value']
+            elif BOARD_CONFIG[tid]['value'] > 0:
+                score += BOARD_CONFIG[tid]['value']
             else:
-                negative.append(board_config[tid]['value'])
+                negative.append(BOARD_CONFIG[tid]['value'])
         negative = sorted(negative)
         for i in range(invert):
             if len(negative) > i:
