@@ -288,6 +288,19 @@ class GUI:
             self._draw_guardians(tid)
 
 
+    def _draw_score(self):
+        self.canvas.create_text(640, 256, text='Tiles: ' + ' '.join([str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']) if verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value'] != 0 else 'G' for tid in self.game.scores[self.client_id]]), anchor='nw', font='TkMenuFont', fill='black')
+        score = self.game.calculate_score(self.game.scores[self.client_id])
+        self.canvas.create_text(640, 288, text='Score: ' + str(score), anchor='nw', font='TkMenuFont', fill='black')
+
+
+    def _update_game_meta_data(self, colors):
+        self.game_id.set('Game: ' + self.game.game_id)
+        self.players_list.set([self.clients[player][0] + ' (' + color + ')' + '[' + str(self.game.calculate_score(self.game.scores[player])) + ']' for player, color in zip(self.game.players, colors[:len(self.game.players)]) if player in self.clients])
+        self.players_listbox.selection_clear(0, tkinter.END)
+        self.players_listbox.selection_set(self.game.players.index(self.game.active_player))
+
+
     def poll(self):
         colors = ['blue', 'red', 'green', 'purple']
         if self.client_registered:
@@ -296,11 +309,10 @@ class GUI:
         if self.client_state == 'game_frame':
             if self.game is not None:
                 self.canvas.delete('all')
-                self.game_id.set('Game: ' + self.game.game_id)
-                self.players_list.set([self.clients[player][0] + ' (' + color + ')' + '[' + str(self.game.calculate_score(self.game.scores[player])) + ']' for player, color in zip(self.game.players, colors[:len(self.game.players)]) if player in self.clients])
-                self.players_listbox.selection_clear(0, tkinter.END)
-                self.players_listbox.selection_set(self.game.players.index(self.game.active_player))
-                if self.game.host_client_id == self.client_id and self.game.game_state == 'initialization':
+
+                self._update_game_meta_data(colors)
+
+                if self.game.host_client_id == self.client_id and self.game.game_state == 'initialization' and len(self.game.players) > 1:
                     self.start_game_button.configure(state=tkinter.NORMAL)
                 elif self.game.game_state == 'initialization':
                     self.start_game_button.configure(text='waiting for players')
@@ -319,9 +331,7 @@ class GUI:
                         item = self.canvas.find_withtag('tid=' + ntid)
                         self.canvas.itemconfig(item, width=3, outline='white')
 
-                    self.canvas.create_text(640, 256, text='Tiles: ' + ' '.join([str(verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value']) if verfuchst.logic.gamestate.BOARD_CONFIG[tid]['value'] != 0 else 'G' for tid in self.game.scores[self.client_id]]), anchor='nw', font='TkMenuFont', fill='black')
-                    score = self.game.calculate_score(self.game.scores[self.client_id])
-                    self.canvas.create_text(640, 288, text='Score: ' + str(score), anchor='nw', font='TkMenuFont', fill='black')
+                    self._draw_score()
             if self.game is not None:
                 if self.game.game_state == 'completed':
                     _display_final_score(colors)
